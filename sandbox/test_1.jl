@@ -9,7 +9,7 @@ using Plots
 
 
 using Statistics
-#using Interpolations
+using Interpolations
 
 
 
@@ -17,8 +17,16 @@ using Revise
 include("SimulationBasedStability.jl")
 include("structures.jl")
 #include("functinos.jl")
+xs = 1:0.2:5
+f(x) = sin(x)
+A = [[f(x),x] for x in xs]
+interp_linear = LinearInterpolation(xs, A,Gridded(Linear()))
+interp_linear(3.1) # approximately log(3.1)
+StateSmaplingTime=-0.2:0.1:1
 
-
+interp_linear = LinearInterpolation(StateSmaplingTime,  [u0 for x in StateSmaplingTime])
+LinearInterpolation(StateSmaplingTime,[CompRand(u0) for t in StateSmaplingTime])
+collect(StateSmaplingTime)
 function delay_mathieu_model(du,u,h,p,t)
     δ, ϵ, b, κ, τ = p
   
@@ -27,9 +35,8 @@ function delay_mathieu_model(du,u,h,p,t)
 end
 
 
-
 #h(p, t; idxs) = (rand()-0.5) .+ 1im*(rand()-0.5)*10.0
-h(p, t) = [1.0,1.0]# .* (1.0+1.0im)
+h(p, t) = [0.0,0.0]# .* (1.0+1.0im)
 δ=3.0
 ϵ=2.0
 b=-0.15
@@ -42,14 +49,14 @@ taumax=maximum(lags)
 tspan = (0.0, T) # The end of the integration time considert to be the timeperiod of the system.
 
 #u0=[1.0+1.0im,1.0+1.0im]
-u0=[1.0,1.0];
+u0=[0.0,0.0];
 prob = DDEProblem(delay_mathieu_model, u0, h, tspan, p; constant_lags = lags);
 alg = MethodOfSteps(Tsit5());
 
 #abc=solve(prob,alg,reltol=1e-3,abstol=1e-3)
 
 
-DelayMathieu_egi_prblem=dynamic_problem(prob,alg,taumax,Historyresolution=100,eigN=2);
+DelayMathieu_egi_prblem=dynamic_problem(prob,alg,taumax,Historyresolution=40,eigN=2);
 
 
 compute_eig!(DelayMathieu_egi_prblem);
@@ -66,9 +73,10 @@ end
 #big_u0=big.(u0)
 
 
+
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
-DelayMathieu_egi_prblem=dynamic_problem(prob,alg,taumax,Historyresolution=100,eigN=8);
+DelayMathieu_egi_prblem=dynamic_problem(prob,alg,taumax,Historyresolution=500,eigN=4);
 
 
 Nshift=0;
@@ -90,11 +98,20 @@ Si,Vi =SVi1real(DelayMathieu_egi_prblem,1) #Si2,Vi2
 plot!(DelayMathieu_egi_prblem.StateSmaplingTime.+ T*(Nshift-1),real.(Si),linewidth=2)
 plot!(DelayMathieu_egi_prblem.StateSmaplingTime.+ T*(Nshift),real.(Vi),linewidth=2)
 
+plot!(legend = :bottomleft)
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 #Vi*DelayMathieu_egi_prblem.StateCombinations .- Si2
 
+SV=Si'*Vi;
+SS=Si'*Si;
 
 
+Hi=SS\SV;
+
+using GenericSchur
+S = schur(Hi .+ 0im)
+VL = eigvecs(S, left=true)
+VR = eigvecs(S, left=false)
 
 A' * diagm(μs) * A
 -Hi

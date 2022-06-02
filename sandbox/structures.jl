@@ -13,14 +13,35 @@ end
 
 function dynamic_problem(prob,alg,maxdelay;Historyresolution=20,eigN=8,zerofixpont=true,reltol=1e-3,abstol=1e-3);
         
-    StateSmaplingTime=-maxdelay  :maxdelay/(Historyresolution-1) :0;
+    #StateSmaplingTime=-maxdelay  :maxdelay/(Historyresolution-1) :0;
+    StateSmaplingTime=LinRange(-maxdelay,0.0,Historyresolution); 
     #first solution for random initial functions
     #TODO: the true random thing, leads to too small stap size at the initial simulation
+   # solset= [
+   #     solve(
+   #         remake(prob;u0=CompRand(u0), h=(p,t)->u0+CompRand(u0))
+   #         ,alg,reltol=1e-3,abstol=1e-3) for k in 1:eigN];
+
+   
+   #StateSmaplingTimeSMALL=LinRange(-maxdelay,0.0,100);  
+#TODO: melyik kezdő függvény a jó?!?!?!?! - lehet sima lépcsős is?
+
+    interpolationfunctions=[
+             LinearInterpolation(StateSmaplingTime,
+             [[sin(k*2pi*t/maxdelay),sin(k*2pi*t/maxdelay)] for t in StateSmaplingTime]
+             ) for k in 1:eigN
+             ]
+             
     solset= [
         solve(
-            remake(prob;u0=CompRand(u0), h=(p,t)->CompRand(u0))
+            remake(prob;u0=CompRand(u0),
+            h=(p,t)->(1.0+1.0im) .* interpolationfunctions[k](t))
             ,alg,reltol=1e-3,abstol=1e-3) for k in 1:eigN];
-
+    #solset= [
+    #    solve(
+     #       remake(prob;u0=CompRand(u0),
+     #       h=(p,t)->LinearInterpolation(StateSmaplingTimeSMALL,[[sin(k*t/maxdelay),sin(k*t/maxdelay)] for t in StateSmaplingTimeSMALL])(t))
+     #       ,alg,reltol=1e-3,abstol=1e-3) for k in 1:eigN];
     StateCombinations=diagm(0 => ones(typeof(CompRand(prob.u0[1])),eigN))## at the initaliatio there is no combination, a random inital values are used
 
     dynamic_problem(prob,alg,maxdelay,StateSmaplingTime,eigN,zerofixpont,solset,StateCombinations);
@@ -28,6 +49,7 @@ function dynamic_problem(prob,alg,maxdelay;Historyresolution=20,eigN=8,zerofixpo
 end
 
 function iterate!(dp::dynamic_problem);
+    #TODO: az S-ek alapján csinálni az új history függvényt, bár ennek nem kellene, hogy értelme legyen.
     dp_prev=deepcopy(dp);
     for k in 1:dp.eigN
         hloc(p,t)=histopryremapp(t+T,dp_prev.StateCombinations,dp_prev.SolutionSet,k)
@@ -55,11 +77,11 @@ function compute_eig!(dp::dynamic_problem)
     
     Snorm=[norm(Si[:,k]) for k in 1:dp.eigN ];
     
-    Hi=SS\SV;
+    Hi=SS\SV .+ 0im;
 
     μs,Ai=eigen(Hi);
     μs,Ai=sorteigen(μs,Ai);
-    dp.StateCombinations[:] .= (Ai ./ μs)[:];#length(dp.StateSmaplingTime)*  ./ Snorm   ./ μs
+    dp.StateCombinations[:] .= (Ai ./ μs./ Snorm)[:];#length(dp.StateSmaplingTime)*  ./ Snorm   ./ μs
     return  μs
 end
 
