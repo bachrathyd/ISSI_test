@@ -42,7 +42,7 @@ end
 h(p, t) = [0.0,0.0] .* (1.0+1.0im)
 δ=3.0
 ϵ=0.8
-b=-0.5
+b=-0.05
 κ=0.01
 τ=2pi 
 T=2pi
@@ -53,21 +53,22 @@ tspan = (0.0, T) # The end of the integration time considert to be the timeperio
 
 u0=[1.0+1.0im,1.0+1.0im]
 #u0=[0.0,0.0];
-prob = DDEProblem(delay_mathieu_model, u0, h, tspan, p; constant_lags = lags, dtmax=T/20.0);
+prob = DDEProblem(delay_mathieu_model, u0, h, tspan, p; constant_lags = lags, dtmax=T/40.0,reltol=1e-3,abstol=1e-3);
 alg = MethodOfSteps(Tsit5());
 
 #abc=solve(prob,alg,reltol=1e-3,abstol=1e-3)
 
 
-DelayMathieu_egi_prblem=dynamic_problem(prob,alg,taumax,Historyresolution=100,eigN=4);
+DelayMathieu_egi_prblem=dynamic_problem(prob,alg,taumax,Historyresolution=100,eigN=10);
 
 
 compute_eig!(DelayMathieu_egi_prblem);
 
-for k=1:10
+@time for k=1:10
 iterate!(DelayMathieu_egi_prblem);
 ei,si,vi,aii=compute_eig!(DelayMathieu_egi_prblem)
-@show maximum(abs.(ei))
+@show (abs.(ei))
+#@show maximum(abs.(ei))
 end
 
 #alg=Rosenbrock23(autodiff=false)
@@ -79,19 +80,25 @@ end
 
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
-DelayMathieu_egi_prblem=dynamic_problem(prob,alg,taumax,Historyresolution=500,eigN=4);
+DelayMathieu_egi_prblem=dynamic_problem(prob,alg,taumax,Historyresolution=500,eigN=2);
 
 
 Nshift=0;
-Si,Vi =SVi1real(DelayMathieu_egi_prblem,1)
+Si,Vi =SVi1real(DelayMathieu_egi_prblem,2)
 plot(DelayMathieu_egi_prblem.StateSmaplingTime.+ T*(Nshift-1),real.(Si),linewidth=2)
 plot!(DelayMathieu_egi_prblem.StateSmaplingTime.+ T*(Nshift),real.(Vi),linewidth=2)
 
 
 ei,sii,vii,aii=compute_eig!(DelayMathieu_egi_prblem)
-@show (abs.(ei))
+norm(sii)
+norm(vii)
+siivii=sii'*vii;
+siisii=sii'*sii
+Hi=siisii\siivii
+plot(sii)
+@show ((ei))
 #DelayMathieu_egi_prblem.StateCombinations[:] .= [1.0,-10.0,0.0,1.0]
-
+DelayMathieu_egi_prblem.StateCombinations .*=1.0;
 A =DelayMathieu_egi_prblem.StateCombinations
 plot!(DelayMathieu_egi_prblem.StateSmaplingTime.+ T*(Nshift),real.(Vi*A),linewidth=5)
 
@@ -99,8 +106,10 @@ plot!(DelayMathieu_egi_prblem.StateSmaplingTime.+ T*(Nshift),real.(Vi*A),linewid
 Nshift += 1;
 iterate!(DelayMathieu_egi_prblem);
 Si,Vi =SVi1real(DelayMathieu_egi_prblem,2) #Si2,Vi2
-plot!(DelayMathieu_egi_prblem.StateSmaplingTime.+ T*(Nshift-1),real.(Si),linewidth=2)
+plot(DelayMathieu_egi_prblem.StateSmaplingTime.+ T*(Nshift-1),real.(Si),linewidth=2)
 plot!(DelayMathieu_egi_prblem.StateSmaplingTime.+ T*(Nshift),real.(Vi),linewidth=2)
+plot!(DelayMathieu_egi_prblem.StateSmaplingTime.+ T*(Nshift-1),imag.(Si),linewidth=1)
+plot!(DelayMathieu_egi_prblem.StateSmaplingTime.+ T*(Nshift),imag.(Vi),linewidth=1)
 
 plot!(legend = :bottomleft)
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -110,6 +119,7 @@ SS=Si'*Si;
 
 
 Hi=SS\SV;
+μs,Ai=eigen(Hi, sortby = x -> -abs(x));
 
 using GenericSchur
 S = schur(Hi .+ 0im)

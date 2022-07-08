@@ -140,7 +140,6 @@ delayoscillmapp(2.0, 0.02)
 
 
 
-
 using MDBM
 
 using PyPlot;
