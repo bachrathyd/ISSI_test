@@ -36,8 +36,9 @@ end
 
 
 δ=3.0
-ϵ=2.95
-b=-0.15
+#ϵ=2.95
+ϵ=0.8
+b=-0.05
 κ=0.01
 τ=2pi 
 T=1.0*2pi
@@ -54,7 +55,7 @@ tspan = (0.0, T) # The end of the integration time considert to be the timeperio
 
 u0=[1.0+1.0im,1.0+1.0im];
 #u0=[0.0,0.0];
-prob = DDEProblem(delay_mathieu_model!, u0, h, tspan, p; constant_lags = lags,reltol=1e-3,dtmax=T/5);#
+prob = DDEProblem(delay_mathieu_model!, u0, h, tspan, p; constant_lags = lags,reltol=1e-2,abstol=1e-2,dtmax=T/25);#
 
 #TODO: kell ez egyáltalán? , dtmax=T/10.0
 #TODO:  saveat - testing
@@ -73,13 +74,13 @@ aaa=solve(prob,alg);
 plot(aaa)
 @benchmark solve(prob,alg)
 
-
-
 # --------------------------------------------
 
 #@time DelayMathieu_egi_prblem=dynamic_problem(prob,alg,taumax,Historyresolution=10,eigN=4);
-@time DelayMathieu_egi_prblem=dynamic_problem(prob,alg,taumax,eigN=6);
+@time DelayMathieu_egi_prblem=dynamic_problem(prob,alg,taumax,eigN=4);
 @time ei,eis=spectralRadiusOfMapping(DelayMathieu_egi_prblem);
+
+
 @benchmark  DelayMathieu_egi_prblem=dynamic_problem(prob,alg,taumax,eigN=4)
 @benchmark  ei,eis=spectralRadiusOfMapping(DelayMathieu_egi_prblem) setup=(DelayMathieu_egi_prblem=dynamic_problem(prob,alg,taumax,eigN=4))
 
@@ -89,20 +90,29 @@ plot(DelayMathieu_egi_prblem.SolutionSet[1].t)
 
 
 # -----------------root iteration -----------------------------
+EigN=10
+@time DelayMathieu_egi_prblem=dynamic_problem(prob,alg,taumax,eigN=EigN,Historyresolution=500);
+NN=15;
+Spect=zeros(EigN,NN)
+timeing=zeros(NN)
 plot()
-for k=1:20
+for k=1:NN
    # k=0
   #  k+=1
-iterate!(DelayMathieu_egi_prblem);
-ei,si,vi,aii=compute_eig!(DelayMathieu_egi_prblem);
+  timeing[k]=@elapsed begin
+        iterate!(DelayMathieu_egi_prblem);
+        ei,si,vi,aii=compute_eig!(DelayMathieu_egi_prblem);
+  end 
+  @show timeing[k]
 Aμs,Ai=eigen(aii, sortby = x -> -abs(x))
-@show Ai_norm=norm(abs.(Aμs) .-1 )
-@show abs.(ei)
+#@show Ai_norm=norm(abs.(Aμs) .-1 )
+@show Spect[:,k]=abs.(ei)
 #scatter(ones(DelayMathieu_egi_prblem.eigN) .*k ,log.(abs.(ei)))
 scatter!(ones(DelayMathieu_egi_prblem.eigN) .*k ,log.(abs.(ei)))
 end
 plot!()
-
+plot(timeing)
+plot(log.(abs.(Spect[:,1:NN ] .- Spect[:,end]))')
 #------------------------- Profiling ---------------
 
 function profile_test(n)
@@ -115,7 +125,7 @@ end
 # compilation
 @profview profile_test(1)
 # pure runtime
-@profview profile_test(100)
+@profview profile_test(10)
 
 #  ----------------------MDBM test--------------------------
 

@@ -1,4 +1,4 @@
-struct dynamic_problem
+struct dynamic_problem#{T,Tfloat}
     DDEdynProblem::DDEProblem #e.g. =DDEProblem(....)
     alg::MethodOfSteps # e.g.: alg = MethodOfSteps(Tsit5())
     maxdelay::Float64
@@ -6,9 +6,9 @@ struct dynamic_problem
     eigN::Integer # number of eigen vectors
     zerofixpont::Bool
     SolutionSet::Vector{ODESolution}
-    StateCombinations::Matrix
-    Si::Matrix
-    Vi::Matrix
+    StateCombinations::Matrix#{Tfloat}
+    Si::Matrix#{T}
+    Vi::Matrix#{T}
 end
 
 function CompRand(x::Vector)
@@ -148,7 +148,7 @@ function spectralRadiusOfMapping(dp::dynamic_problem)
         Aμs,Ai=eigen(aii, sortby = x -> -abs(x))
         #@show 
         Ai_norm=norm(abs.(Aμs) .-1 )
-        if Ai_norm<1e-2 #TODO: what is a good limit?
+        if Ai_norm<1e-4 #TODO: what is a good limit?
             #println("break at $k")
             break
         end
