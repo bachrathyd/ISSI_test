@@ -78,8 +78,14 @@ end
 function iterate!(dp::dynamic_problem);
     #TODO: az S-ek alapján csinálni az új history függvényt, bár ennek nem kellene, hogy értelme legyen.
     dp_prev=deepcopy(dp);
+    #dp_prev=dp;
+  
+    history_vector=[(p,t)->histopryremap(t+T,dp_prev.StateCombinations,dp_prev.SolutionSet,k)  for k in 1:dp.eigN]
+    #history_vector=[(p,t)->histopryremap(t+T,dp.StateCombinations,dp.SolutionSet,k)  for k in 1:dp.eigN]
+    #Threads.@threads
     for k in 1:dp.eigN
-        hloc(p,t)=histopryremap(t+T,dp_prev.StateCombinations,dp_prev.SolutionSet,k)
+        hloc(p,t)=history_vector[k](p,t)#
+        #hloc(p,t)=histopryremap(t+T,dp_prev.StateCombinations,dp_prev.SolutionSet,k)
         dp.SolutionSet[k]= solve(
             remake(dp.DDEdynProblem;u0= hloc(p,0.0), 
             h=(p,t)-> hloc(p,t))
@@ -95,7 +101,7 @@ function compute_eig!(dp::dynamic_problem)
     SV=Si'*Vi;
     SS=Si'*Si;
     
-    Snorm=[norm(Si[:,k]) for k in 1:dp.eigN ];
+    #Snorm=[norm(Si[:,k]) for k in 1:dp.eigN ];
     
     Hi=SS\SV .+ 0.0im;
 
@@ -103,30 +109,36 @@ function compute_eig!(dp::dynamic_problem)
 
     
     #dp.StateCombinations[:] .= ((Ai))[:]# ./ μs./ Snorm)[:];#length(dp.StateSmaplingTime)*  ./ Snorm   ./ μs
-   dp.StateCombinations[:] .= ((Ai) / diagm(μs))[:];#length(dp.StateSmaplingTime)*  ./ Snorm   ./ μs
-   # dp.StateCombinations = Ai;#./ μs)[:];#length(dp.StateSmaplingTime)*  ./ Snorm   ./ μs
+    #dp.StateCombinations[:] .= ((Ai) / diagm(μs) ./ Snorm)[:];#length(dp.StateSmaplingTime)*  ./ Snorm   ./ μs
+    #dp.StateCombinations[:] .= ((Ai)  ./ Snorm)[:];println("Ez nem, jó, mert a V-t lehetne normalizálni és nem az S-t!!!)
+    dp.StateCombinations[:] .= ((Ai) / diagm(μs) )[:];#length(dp.StateSmaplingTime)*  ./ Snorm   ./ μs
+    # dp.StateCombinations = Ai;#./ μs)[:];#length(dp.StateSmaplingTime)*  ./ Snorm   ./ μs
     return  μs,Si,Vi,Ai
 end
 #TODO: check saveat=....
 #In this case it saves only the values at the necessary timeponts? BUT will it be still prcise enough for the next integrations????
 function spectralRadiusOfMapping(dp::dynamic_problem)
     #TODO: itt valami rendesebb iteráció kell, vagy akár a gyökök számát is autómatikusan változtatni
-    for k=1:10
-        compute_eig!(dp);
+    for k=1:20
+        ei,si,vi,aii=compute_eig!(dp);
+        Aμs,Ai=eigen(aii, sortby = x -> -abs(x))
+        #@show 
+        Ai_norm=norm(abs.(Aμs) .-1 )
+        if Ai_norm<1e-1
+            #println("break at $k")
+            break
+        end
         iterate!(dp);
     end
     ei,si,vi,aii=compute_eig!(dp);
     spectraradiuse=maximum(abs.(ei));
-    @show spectraradiuse
+    #@show spectraradiuse
     return spectraradiuse,ei
 end
 
 function histopryremap(t,A::Matrix,SolutionSetV,solindex)
     sum([getvalues(SolutionSetV[i],t) * A[i,solindex]  for i in 1:length(SolutionSetV)])
- end
-
-
-
+end
 
 function getvalues(sol::ODESolution,t::Real)
     if t<0

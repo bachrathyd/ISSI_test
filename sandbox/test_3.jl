@@ -7,6 +7,9 @@ using LinearAlgebra
 using Random
 using Plots
 
+using StaticArrays
+
+using BenchmarkTools
 
 using Statistics
 using Interpolations
@@ -41,18 +44,48 @@ tspan = (0.0, T) # The end of the integration time considert to be the timeperio
 
 u0=[1.0+1.0im,1.0+1.0im]
 #u0=[0.0,0.0];
-prob = DDEProblem(delay_mathieu_model, u0, h, tspan, p; constant_lags = lags, dtmax=T/10.0,reltol=1e-3,abstol=1e-3);#
+prob = DDEProblem(delay_mathieu_model, u0, h, tspan, p; constant_lags = lags,reltol=1e-1,abstol=1e-1,dtmax=T/5);#
+#TODO: kell ez egyáltalán? , dtmax=T/10.0
 #TODO:  saveat - testing
+
 #TODO: , dense=false - ettől kétszer gyorsabb, de mintha más lenne a gyök utána!!! - ettől nem lesz meg a continuouse interpolation!!!
+#Mert lineáris interpolálást csinál!!!!
+
+#TODO: solve(..., alg_hints=[:stiff])
 alg = MethodOfSteps(Tsit5());
+#alg = MethodOfSteps(BS3());
+#alg = MethodOfSteps(Vern6()); XXX
+#alg = MethodOfSteps(Rosenbrock23()); #stiff
+#alg = MethodOfSteps(Rodas4()); #stiff
+#@btime
+@time DelayMathieu_egi_prblem=dynamic_problem(prob,alg,taumax,Historyresolution=10,eigN=4);
+@time ei,eis=spectralRadiusOfMapping(DelayMathieu_egi_prblem);
 
-@time for k=1:10
-    DelayMathieu_egi_prblem=dynamic_problem(prob,alg,taumax,Historyresolution=100,eigN=10);
-ei,eis=spectralRadiusOfMapping(DelayMathieu_egi_prblem);
+plot(DelayMathieu_egi_prblem.SolutionSet[1])
 
+for k=1:20
+    k=0
+    k+=1
+iterate!(DelayMathieu_egi_prblem);
+ei,si,vi,aii=compute_eig!(DelayMathieu_egi_prblem);
+Aμs,Ai=eigen(aii, sortby = x -> -abs(x))
+@show Ai_norm=norm(abs.(Aμs) .-1 )
+@show abs.(ei)
+#scatter(ones(DelayMathieu_egi_prblem.eigN) .*k ,log.(abs.(ei)))
+scatter!(ones(DelayMathieu_egi_prblem.eigN) .*k ,log.(abs.(ei)))
 end
-@show (eis);
-plot(log.(abs.(eis)))
+
+function profile_test(n)
+    for i = 1:n
+    DelayMathieu_egi_prblem=dynamic_problem(prob,alg,taumax,Historyresolution=20,eigN=4);
+    ei,eis=spectralRadiusOfMapping(DelayMathieu_egi_prblem);
+end
+end
+
+# compilation
+@profview profile_test(1)
+# pure runtime
+@profview profile_test(10)
 
 #  ===================================================
 
@@ -64,9 +97,9 @@ gzu
 function foo(x)
     ploc=(x[1],x[2],p[3:end]...);
 
-    pr = DDEProblem(delay_mathieu_model, u0, h, tspan, ploc; constant_lags = lags, dtmax=T/20.0,reltol=1e-3,abstol=1e-3);
+    pr = DDEProblem(delay_mathieu_model, u0, h, tspan, ploc; constant_lags = lags, reltol=1e-3,abstol=1e-3);
     
-    DM=dynamic_problem(pr,MethodOfSteps(Tsit5()),taumax,Historyresolution=100,eigN=10);
+    DM=dynamic_problem(pr,MethodOfSteps(Tsit5()),taumax,Historyresolution=10,eigN=2);
     
     return spectralRadiusOfMapping(DM)[1]-1
 end
@@ -101,9 +134,8 @@ gr();
 axis=[Axis(-1:0.4:5.,:δ),
     Axis(-2:0.4:1.5,:ϵ)]
 
-iteration=3;#0- csak a kezdeti háló,1,2
-stab_border_points=getinterpolatedsolution(MDBM.solve!(MDBM_Problem(foo,axis),iteration));
-
-scatter(stab_border_points...,xlim=(-1.,5),ylim=(-2.,1.5),
-    guidefontsize=14,tickfont = font(10),markersize=2,markerstrokewidth=0)
-    Fudejo007
+iteration=4;#0- csak a kezdeti háló,1,2
+mdbmsol=MDBM.solve!(MDBM_Problem(foo,axis),0);
+for k=1:iteration
+   
+end
