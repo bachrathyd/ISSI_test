@@ -9,8 +9,8 @@ struct dynamic_problem{TCompFloat,Tint,Tfloat}
     StateCombinations::Matrix{TCompFloat}
     Si::Matrix{Vector{TCompFloat}}
     Vi::Matrix{Vector{TCompFloat}}
-    eigs::Vector{TCompFloat}
     Ai::Matrix{TCompFloat}
+    eigs::Vector{TCompFloat}
 end
 
 function CompRand(x::Vector)
@@ -86,27 +86,28 @@ function dynamic_problem(prob,alg,maxdelay;Historyresolution=20,eigN=4,zerofixpo
     eigs=zeros(ComplexF64,eigN);
     Ai=zeros(ComplexF64,eigN,eigN);
 
-    dynamic_problem{ComplexF64,Int64,Float64}(prob,alg,maxdelay,StateSmaplingTime,eigN,zerofixpont,solset,StateCombinations,Si,Vi,eigs,Ai);
+    dynamic_problem{ComplexF64,Int64,Float64}(prob,alg,maxdelay,StateSmaplingTime,eigN,zerofixpont,solset,StateCombinations,Si,Vi,Ai,eigs);
     #dynamic_problem(prob,alg,maxdelay,StateSmaplingTime,eigN,zerofixpont,solset,StateCombinations);
 
 end
 
 function iterate!(dp::dynamic_problem);
     #TODO: az S-ek alapján csinálni az új history függvényt, bár ennek nem kellene, hogy értelme legyen.
-    dp_prev=deepcopy(dp);
+    SolutionSet_prev=deepcopy(dp.SolutionSet);
+    StateCombinations_prev=deepcopy(dp.StateCombinations);
     #dp_prev=dp;
   
-    history_vector=[(p,t)->histopryremap(t+dp.DDEdynProblem.tspan[end],dp_prev.StateCombinations,dp_prev.SolutionSet,k)  for k in 1:dp.eigN]
+    history_vector=[(p,t)->histopryremap(t+dp.DDEdynProblem.tspan[end],StateCombinations_prev,SolutionSet_prev,k) for k in 1:dp.eigN]
     
     
     #history_vector=[(p,t)->histopryremap(t+T,dp.StateCombinations,dp.SolutionSet,k)  for k in 1:dp.eigN]
-    #Threads.@threads
-    for k in 1:dp.eigN
-        hloc(p,t)=history_vector[k](p,t)#
-        #hloc(p,t)=histopryremap(t+T,dp_prev.StateCombinations,dp_prev.SolutionSet,k)
+    #TODO: Threads.@threads ????
+    Threads.@threads for k in 1:dp.eigN
+        #hloc(p,t)=#
+
         dp.SolutionSet[k]= solve(
-            remake(dp.DDEdynProblem;u0= hloc(dp.DDEdynProblem.p,0.0), 
-            h=(p,t)-> hloc(p,t))
+            remake(dp.DDEdynProblem;u0= history_vector[k](dp.DDEdynProblem.p,0.0), 
+            h=(p,t)-> history_vector[k](p,t))
             ,dp.alg)
     end
 end
@@ -142,8 +143,8 @@ function compute_eig!(dp::dynamic_problem)
     #dp.StateCombinations[:] .= ((Ai) / diagm(μs) ./ Snorm)[:];#length(dp.StateSmaplingTime)*  ./ Snorm   ./ μs
     #dp.StateCombinations[:] .= ((Ai)  ./ Snorm)[:];println("Ez nem, jó, mert a V-t lehetne normalizálni és nem az S-t!!!)
     
-    #dp.StateCombinations[:] .= ((dp.Ai) / diagm(dp.eigs) )[:];#length(dp.StateSmaplingTime)*  ./ Snorm   ./ μs
-    dp.StateCombinations[:] .= ((dp.Ai) ./ (dp.eigs) )[:];#length(dp.StateSmaplingTime)*  ./ Snorm   ./ μs
+    dp.StateCombinations[:] .= ((dp.Ai) / diagm(dp.eigs) )[:];#length(dp.StateSmaplingTime)*  ./ Snorm   ./ μs
+    #dp.StateCombinations[:] .= ((dp.Ai) ./ (dp.eigs) )[:];#length(dp.StateSmaplingTime)*  ./ Snorm   ./ μs
     
     # dp.StateCombinations = Ai;#./ μs)[:];#length(dp.StateSmaplingTime)*  ./ Snorm   ./ μs
     #return  μs,dp.Si,dp.Vi,Ai
@@ -154,7 +155,7 @@ end
 #In this case it saves only the values at the necessary timeponts? BUT will it be still prcise enough for the next integrations????
 function spectralRadiusOfMapping(dp::dynamic_problem)
     #TODO: itt valami rendesebb iteráció kell, vagy akár a gyökök számát is autómatikusan változtatni
-    for k=1:10
+    for k=1:4
         #ei,si,vi,aii=compute_eig!(dp);
         compute_eig!(dp);
         #Aμs,Ai=eigen(aii, sortby = x -> -abs(x))
