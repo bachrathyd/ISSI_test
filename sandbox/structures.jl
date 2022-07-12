@@ -99,7 +99,6 @@ function iterate!(dp::dynamic_problem);
   
     history_vector=[(p,t)->histopryremap(t+dp.DDEdynProblem.tspan[end],StateCombinations_prev,SolutionSet_prev,k) for k in 1:dp.eigN]
     
-    
     #history_vector=[(p,t)->histopryremap(t+T,dp.StateCombinations,dp.SolutionSet,k)  for k in 1:dp.eigN]
     #TODO: Threads.@threads ????
     Threads.@threads for k in 1:dp.eigN
@@ -156,8 +155,10 @@ end
 function spectralRadiusOfMapping(dp::dynamic_problem)
     #TODO: itt valami rendesebb iteráció kell, vagy akár a gyökök számát is autómatikusan változtatni
     for k=1:4
-        #ei,si,vi,aii=compute_eig!(dp);
         compute_eig!(dp);
+
+        #TODO: ezeket berakni a eigs-en belülre
+        #ei,si,vi,aii=compute_eig!(dp);
         #Aμs,Ai=eigen(aii, sortby = x -> -abs(x))
         #Ai_norm=norm(abs.(Aμs) .-1 )
         #if Ai_norm<1e-4 #TODO: what is a good limit?
@@ -186,6 +187,7 @@ function getvalues(sol::ODESolution,t::Real)
     end
 end
 
+#TODO: thees are not needed?!!?:
 
 function SVi1real(dp::dynamic_problem,idx)
     Si=[(getvalues(dp.SolutionSet[solind],t))[idx] for t in dp.StateSmaplingTime, solind in 1:dp.eigN];
