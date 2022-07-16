@@ -81,11 +81,13 @@ function dynamic_problem(prob,alg,maxdelay;Historyresolution=20,eigN=4,zerofixpo
 
     #Si=Matrix{typeof(prob.u0)}(undef,Historyresolution,eigN)
     #Vi=Matrix{typeof(prob.u0)}(undef,Historyresolution,eigN)
+
     Si = [getvalues(solset[solind],t) for t in StateSmaplingTime, solind in 1:eigN];
     Vi = [getvalues(solset[solind],(t+prob.tspan[end])) for t in StateSmaplingTime, solind in 1:eigN];#initialization of the Starting Vector
     eigs=zeros(ComplexF64,eigN);
     Ai=zeros(ComplexF64,eigN,eigN);
 
+    Ai[1,1] = 1.0+0.0im;
     dynamic_problem{ComplexF64,Int64,Float64}(prob,alg,maxdelay,StateSmaplingTime,eigN,zerofixpont,solset,StateCombinations,Si,Vi,Ai,eigs);
     #dynamic_problem(prob,alg,maxdelay,StateSmaplingTime,eigN,zerofixpont,solset,StateCombinations);
 
@@ -116,9 +118,11 @@ function compute_eig!(dp::dynamic_problem)
 
     Tmap=dp.DDEdynProblem.tspan[end]::Float64
 
+    
     dp.Si .= [getvalues(dp.SolutionSet[solind],t) for t in dp.StateSmaplingTime, solind in 1:dp.eigN];
     dp.Vi .= [getvalues(dp.SolutionSet[solind],(t+Tmap)) for t in dp.StateSmaplingTime, solind in 1:dp.eigN];#initialization of the Starting Vector
     
+
     #Hi=(dp.Si'*dp.Si)\(dp.Si'*dp.Vi);# .+ 0.0im;
 #=
     for solind in 1:dp.eigN
@@ -132,9 +136,12 @@ function compute_eig!(dp::dynamic_problem)
 =#
     #μs,Ai=eigen(Hi, sortby = x -> -abs(x));
     #dp.eigsμs,dp.Ai=eigen(Hi, sortby = x -> -abs(x));
-    EigSol=eigen((dp.Si'*dp.Si)\(dp.Si'*dp.Vi), sortby = x -> -abs(x));
-    dp.eigs .= EigSol.values;
-    dp.Ai .= EigSol.vectors;
+#    EigSol=eigen((dp.Si'*dp.Si)\(dp.Si'*dp.Vi), sortby = x -> -abs(x));
+#dp.eigs .= EigSol.values;
+#dp.Ai .= EigSol.vectors;
+
+
+
     #μs,Ai=Arpack.eigs(Hi);#Not good, it does not provide all the eigen values: "nev+2 <= ncv <= n"
 
     
@@ -142,7 +149,33 @@ function compute_eig!(dp::dynamic_problem)
     #dp.StateCombinations[:] .= ((Ai) / diagm(μs) ./ Snorm)[:];#length(dp.StateSmaplingTime)*  ./ Snorm   ./ μs
     #dp.StateCombinations[:] .= ((Ai)  ./ Snorm)[:];println("Ez nem, jó, mert a V-t lehetne normalizálni és nem az S-t!!!)
     
-    dp.StateCombinations[:] .= ((dp.Ai) / diagm(dp.eigs) )[:];#length(dp.StateSmaplingTime)*  ./ Snorm   ./ μs
+    if dp.zerofixpont
+        EigSol=eigen((dp.Si'*dp.Si)\(dp.Si'*dp.Vi), sortby = x -> -abs(x));
+        dp.eigs .= EigSol.values;
+        dp.Ai .= EigSol.vectors;
+        dp.StateCombinations[:] .= ((dp.Ai) / diagm(dp.eigs))[:];#length(dp.StateSmaplingTime)*  ./ Snorm   ./ μs
+    else
+        println("fixpoint test")
+        ϵP=1.0
+        AP=zeros(Float64,dp.eigN,dp.eigN)
+        AP[1,:] .= 1.0
+        AP[2:end,2:end].=ϵP*diagm(0 => ones(dp.eigN-1));
+        APinv=inv(AP)
+        dp.Si .= dp.Si * APinv;
+        dp.Vi .=  dp.Vi * APinv;
+
+
+        EigSol=eigen((dp.Si[:,2:end]'*dp.Si[:,2:end])\(dp.Si[:,2:end]'*dp.Vi[:,2:end]), sortby = x -> -abs(x));
+
+
+        dp.eigs .=[1.0+0.0im, EigSol.values...];
+        dp.Ai[2:end,2:end] .= EigSol.vectors;
+        dp.eigs[1]=1.0;
+        dp.StateCombinations[:] .= (APinv*(dp.Ai/ diagm(dp.eigs)) *AP )[:];#length(dp.StateSmaplingTime)*  ./ Snorm   ./ μs
+        dp.StateCombinations[1,:] .=  0.0;
+        dp.StateCombinations[:,1] .=  0.0;
+        dp.StateCombinations[1,1] =  1.0+0.0im;
+    end
     #dp.StateCombinations[:] .= ((dp.Ai) ./ (dp.eigs) )[:];#length(dp.StateSmaplingTime)*  ./ Snorm   ./ μs
     
     # dp.StateCombinations = Ai;#./ μs)[:];#length(dp.StateSmaplingTime)*  ./ Snorm   ./ μs
@@ -154,7 +187,7 @@ end
 #In this case it saves only the values at the necessary timeponts? BUT will it be still prcise enough for the next integrations????
 function spectralRadiusOfMapping(dp::dynamic_problem)
     #TODO: itt valami rendesebb iteráció kell, vagy akár a gyökök számát is autómatikusan változtatni
-    for k=1:4
+    for k=1:10
         compute_eig!(dp);
 
         #TODO: ezeket berakni a eigs-en belülre
