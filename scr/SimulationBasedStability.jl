@@ -11,17 +11,16 @@ using Reexport
 #using Lazy: iterated, take
 
 include("structures.jl")
-#include("structures_input.jl")
-#include("structures_result.jl")
 
-include("functions.jl")
+#include("functions.jl")
 #include("functions_discretization.jl")
 #include("functions_method.jl")
 
 export 
 dynamic_problem,
 histopryremapp,
-CompRand
+CompRand,
+compute_eig!
 #SemiDiscretization, NumericSD, 
 #ProportionalMX,
 #Delay,DelayMX,
