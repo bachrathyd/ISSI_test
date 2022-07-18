@@ -1,10 +1,12 @@
+5+5
 
-import Pkg
 
+#import Pkg
 
 using DifferentialEquations
 using LinearAlgebra
 using Random
+
 using Plots
 
 using StaticArrays
@@ -16,10 +18,15 @@ using Interpolations
 
 
 using Revise
-push!(LOAD_PATH,"C:/Users/Bachrathy/.julia/dev/ISSI_test/sandbox")
+#push!(LOAD_PATH,"C:/Users/Bachrathy/.julia/dev/ISSI_test/sandbox")
+push!(LOAD_PATH,"C:/Users/Mechanics/Documents/Bachrathy/Git/ISSI_test/sandbox")
 using SimulationBasedStability
 
+
+aaa=0
 function delay_mathieu_model(du,u,h,p,t)
+    global aaa
+    aaa += 1;
     δ, ϵ, b, κ, τ = p
     du[1] = - κ * u[1] - (δ + ϵ * cos(t)) * u[2] + b * h(p, t-τ)[2] + 1.0*cos(4*t)
     du[2] = u[1]
@@ -47,7 +54,8 @@ alg = MethodOfSteps(Tsit5());
 
 @time just_a_test_solution=solve(prob,alg);
 plot(just_a_test_solution)
-
+@show aaa
+just_a_test_solution.t
 
 #@time DelayMathieu_egi_prblem=dynamic_problem(prob,alg,taumax,Historyresolution=50,eigN=11);
 @time DelayMathieu_egi_prblem=dynamic_problem(prob,alg,taumax,Historyresolution=50,eigN=11,zerofixpont=false);

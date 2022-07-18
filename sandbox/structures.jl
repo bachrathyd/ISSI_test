@@ -11,6 +11,7 @@ struct dynamic_problem{TCompFloat,Tint,Tfloat}
     Vi::Matrix{Vector{TCompFloat}}
     Ai::Matrix{TCompFloat}
     eigs::Vector{TCompFloat}
+    maxiteration::Tint
 end
 
 function CompRand(x::Vector)
@@ -23,7 +24,7 @@ function CompRand(x)
     return rand() .- 0.5 + 1.0im*(rand() .- 0.5)
 end
 
-function dynamic_problem(prob,alg,maxdelay;Historyresolution=20,eigN=4,zerofixpont=true,p=[]);
+function dynamic_problem(prob,alg,maxdelay;Historyresolution=20,eigN=4,zerofixpont=true,p=[],maxiteration=6);
    
     StateSmaplingTime=LinRange(-maxdelay,0.0,Historyresolution); 
     #first solution for random initial functions
@@ -88,7 +89,7 @@ function dynamic_problem(prob,alg,maxdelay;Historyresolution=20,eigN=4,zerofixpo
     Ai=zeros(ComplexF64,eigN,eigN);
 
     Ai[1,1] = 1.0+0.0im;
-    dynamic_problem{ComplexF64,Int64,Float64}(prob,alg,maxdelay,StateSmaplingTime,eigN,zerofixpont,solset,StateCombinations,Si,Vi,Ai,eigs);
+    dynamic_problem{ComplexF64,Int64,Float64}(prob,alg,maxdelay,StateSmaplingTime,eigN,zerofixpont,solset,StateCombinations,Si,Vi,Ai,eigs,maxiteration);
     #dynamic_problem(prob,alg,maxdelay,StateSmaplingTime,eigN,zerofixpont,solset,StateCombinations);
 
 end
@@ -187,7 +188,7 @@ end
 #In this case it saves only the values at the necessary timeponts? BUT will it be still prcise enough for the next integrations????
 function spectralRadiusOfMapping(dp::dynamic_problem)
     #TODO: itt valami rendesebb iteráció kell, vagy akár a gyökök számát is autómatikusan változtatni
-    for k=1:10
+    for k=1:dp.maxiteration
         compute_eig!(dp);
 
         #TODO: ezeket berakni a eigs-en belülre

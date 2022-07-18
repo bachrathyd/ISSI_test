@@ -1,0 +1,123 @@
+#import Pkg
+
+using DifferentialEquations
+using LinearAlgebra
+using Random
+
+using Plots
+
+using StaticArrays
+
+using BenchmarkTools
+
+using Statistics
+using Interpolations
+
+
+using Revise
+#push!(LOAD_PATH,"C:/Users/Bachrathy/.julia/dev/ISSI_test/sandbox")
+push!(LOAD_PATH,"C:/Users/Mechanics/Documents/Bachrathy/Git/ISSI_test/sandbox")
+using SimulationBasedStability
+
+
+Neval=0    
+function delay_mathieu_model(du,u,h,p,t)
+    global Neval
+    Neval += 1;
+    δ, ϵ, b, κ, τ = p
+    du[1] = - κ * u[1] - (δ + ϵ * cos(t)) * u[2] + b * h(p, t-τ)[2] + 0.0*cos(4*t)
+    du[2] = u[1]
+end
+
+
+δ=0.50
+ϵ=0.003
+b=0.05
+κ=0.1
+τ=2pi 
+T=4pi
+
+p=( δ, ϵ, b, κ, τ )
+h(p, t) = [0.0,0.0] .* (1.0+1.0im)
+lags = [τ]
+taumax=maximum(lags)
+tspan = (0.0, T) # The end of the integration time considert to be the timeperiod of the system.
+
+u0=[1.0+1.0im,1.0+1.0im]
+#u0=[0.0,0.0];
+prob = DDEProblem(delay_mathieu_model, u0, h, tspan, p; constant_lags = lags,reltol=1e-2,abstol=1e-2,dtmax=T/20);#
+alg = MethodOfSteps(Tsit5());
+@time just_a_test_solution=solve(prob,alg);
+plot(just_a_test_solution)
+
+
+
+#to JIT precomply
+@time begin 
+    
+alg = MethodOfSteps(Tsit5());
+    Neval=0    
+prob = DDEProblem(delay_mathieu_model, u0, h, tspan, p; constant_lags = lags,reltol=1e-2,abstol=1e-2,dtmax=T/10);#
+DelayMathieu_egi_prblem=dynamic_problem(prob,alg,taumax,Historyresolution=50,eigN=4,zerofixpont=true,maxiteration=4);
+@show eimax=spectralRadiusOfMapping(DelayMathieu_egi_prblem);
+@show Neval
+
+end
+
+#Reference solution
+@time begin 
+    MethodOfSteps(Rosenbrock23())
+    MethodOfSteps(Rodas4())
+alg = MethodOfSteps(Tsit5());
+    Neval=0    
+    ϵtol=1e-6
+prob = DDEProblem(delay_mathieu_model, u0, h, tspan, p; constant_lags = lags,reltol=ϵtol,abstol=ϵtol,dtmax=T/40);#
+ DelayMathieu_egi_prblem=dynamic_problem(prob,alg,taumax,Historyresolution=50,eigN=8,zerofixpont=true,maxiteration=8);
+@show eimax=spectralRadiusOfMapping(DelayMathieu_egi_prblem);
+@show Neval
+end
+
+
+
+
+0.8495221650291361 #reltol=1e-5,abstol=1e-5,dtmax=T/40);#
+eimax=0.8496127142756152#ϵtol=1e-6, dtmax=T/40);#
+## --------
+begin
+#alg = MethodOfSteps(BS3());
+#Resi=10 .^ (1.0:-0.1:-6)
+alg = MethodOfSteps(Tsit5());
+Resi=10 .^ (1.0:-0.1:-4.5)
+#alg = MethodOfSteps(Vern6())
+#alg = MethodOfSteps(DP8());#szuperzajos
+
+
+Ni=zeros(Int64,size(Resi))
+ti=zeros(size(Resi))
+epsi=zeros(size(Resi))
+for k in 1:size(Resi)[1]
+    println(k/size(Resi)[1])
+    ti[k]=@elapsed begin 
+        Neval=0    
+        prob = DDEProblem(delay_mathieu_model, u0, h, tspan, p; constant_lags = lags,reltol=Resi[k],abstol=Resi[k]);#,dtmax=T/20
+      DelayMathieu_egi_prblem=dynamic_problem(prob,alg,taumax,Historyresolution=100,eigN=4,zerofixpont=true,maxiteration=3);
+        epsi[k]=spectralRadiusOfMapping(DelayMathieu_egi_prblem);
+        Ni[k]=Neval
+    end
+end
+Ndrop=3;
+Resi=Resi[Ndrop:end]
+Ni=Ni[Ndrop:end]
+epsi=epsi[Ndrop:end]
+ti=ti[Ndrop:end]
+
+f=(x)->log.(abs.(x)) ./ log(10)
+#plot(f.(Resi),f.(Ni))
+#plot(f.(Resi),f.(epsi .- eimax))
+#plot!(f.(Ni),f.(epsi .- eimax))
+plot!(f.(ti),f.(epsi .- eimax))
+
+#plot(f.(Ni),f.(ti))
+#plot(f.(Resi),f.(ti))
+
+end
