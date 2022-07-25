@@ -78,11 +78,11 @@ plot(aaa)
 
 #@time DelayMathieu_egi_prblem=dynamic_problem(prob,alg,taumax,Historyresolution=10,eigN=4);
 @time DelayMathieu_egi_prblem=dynamic_problem(prob,alg,taumax,eigN=4);
-@time ei,eis=spectralRadiusOfMapping(DelayMathieu_egi_prblem);
+@time spectralRadiusOfMapping!(DelayMathieu_egi_prblem);
 
 
 @benchmark  DelayMathieu_egi_prblem=dynamic_problem(prob,alg,taumax,eigN=4)
-@benchmark  ei,eis=spectralRadiusOfMapping(DelayMathieu_egi_prblem) setup=(DelayMathieu_egi_prblem=dynamic_problem(prob,alg,taumax,eigN=4))
+@benchmark  spectralRadiusOfMapping(DelayMathieu_egi_prblem) setup=(DelayMathieu_egi_prblem=dynamic_problem(prob,alg,taumax,eigN=4))
 
 plot(DelayMathieu_egi_prblem.SolutionSet[1])
 
@@ -135,8 +135,8 @@ function foo(x)
     pr = DDEProblem(delay_mathieu_model!, u0, h, tspan, ploc; constant_lags = lags, reltol=1e-3,abstol=1e-3);
     
     DM=dynamic_problem(pr,MethodOfSteps(Tsit5()),taumax,Historyresolution=10,eigN=2);
-    
-    return spectralRadiusOfMapping(DM)[1]-1
+    spectralRadiusOfMapping!(DM)
+    return abs.(DM.eigs[1])-1
 end
 
 function foo(x,y)

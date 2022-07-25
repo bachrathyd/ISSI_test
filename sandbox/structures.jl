@@ -95,6 +95,7 @@ function dynamic_problem(prob,alg,maxdelay;Historyresolution=20,eigN=4,zerofixpo
 end
 
 function iterate!(dp::dynamic_problem);
+    #println("iterate")
     #TODO: az S-ek alapján csinálni az új history függvényt, bár ennek nem kellene, hogy értelme legyen.
     SolutionSet_prev=deepcopy(dp.SolutionSet);
     StateCombinations_prev=deepcopy(dp.StateCombinations);
@@ -114,7 +115,9 @@ function iterate!(dp::dynamic_problem);
     end
 end
 
+
 function compute_eig!(dp::dynamic_problem)
+    #println("compute eig")
     #TODO: az előző végén lévő adatokból meg lehet határozni: a Si=Vi-1*dp.StateCombinations 
 
     Tmap=dp.DDEdynProblem.tspan[end]::Float64
@@ -151,31 +154,86 @@ function compute_eig!(dp::dynamic_problem)
     #dp.StateCombinations[:] .= ((Ai)  ./ Snorm)[:];println("Ez nem, jó, mert a V-t lehetne normalizálni és nem az S-t!!!)
     
     if dp.zerofixpont
+        
+        #println("fixpoint 0")
         EigSol=eigen((dp.Si'*dp.Si)\(dp.Si'*dp.Vi), sortby = x -> -abs(x));
         dp.eigs .= EigSol.values;
         dp.Ai .= EigSol.vectors;
         dp.StateCombinations[:] .= ((dp.Ai) / diagm(dp.eigs))[:];#length(dp.StateSmaplingTime)*  ./ Snorm   ./ μs
+        #dp.StateCombinations[:] .= ((dp.Ai))[:];#length(dp.StateSmaplingTime)*  ./ Snorm   ./ μs
     else
-        println("fixpoint test")
-        ϵP=1.0
-        AP=zeros(Float64,dp.eigN,dp.eigN)
-        AP[1,:] .= 1.0
-        AP[2:end,2:end].=ϵP*diagm(0 => ones(dp.eigN-1));
-        APinv=inv(AP)
-        dp.Si .= dp.Si * APinv;
-        dp.Vi .=  dp.Vi * APinv;
+        
+        testingtype=3
+        
+        if testingtype==1
+            println("fixpoint test 1")
+            
+            ϵP=1.0
+            AP=zeros(Float64,dp.eigN,dp.eigN)
+            AP[1,:] .= 1.0
+            AP[2:end,2:end].=ϵP*diagm(0 => ones(dp.eigN-1));
+            APinv=inv(AP)
+            dp.Si .= dp.Si * APinv;
+            dp.Vi .=  dp.Vi * APinv;
+
+            EigSol=eigen((dp.Si'*dp.Si)\(dp.Si'*dp.Vi), sortby = x -> -abs(x));
+
+            dp.eigs .= EigSol.values;
+            dp.Ai .= EigSol.vectors;
+            dp.StateCombinations[:] .= (APinv*(dp.Ai/ diagm(dp.eigs)) *AP )[:];#length(dp.StateSmaplingTime)*  ./ Snorm   ./ μs
+        
+        elseif testingtype==2
+            println("fixpoint test 2")
+            ϵP=1.0
+            AP=zeros(Float64,dp.eigN,dp.eigN)
+            AP[1,:] .= 1.0
+            AP[2:end,2:end].=ϵP*diagm(0 => ones(dp.eigN-1));
+            APinv=inv(AP)
+            dp.Si .= dp.Si * APinv;
+            dp.Vi .=  dp.Vi * APinv;
 
 
-        EigSol=eigen((dp.Si[:,2:end]'*dp.Si[:,2:end])\(dp.Si[:,2:end]'*dp.Vi[:,2:end]), sortby = x -> -abs(x));
+            EigSol=eigen((dp.Si[:,2:end]'*dp.Si[:,2:end])\(dp.Si[:,2:end]'*dp.Vi[:,2:end]), sortby = x -> -abs(x));
 
+            dp.eigs .=[1.0+0.0im, EigSol.values...];
+            dp.Ai[2:end,2:end] .= EigSol.vectors;
+            dp.eigs[1]=1.0;
+            dp.StateCombinations[:] .= (APinv*(dp.Ai/ diagm(dp.eigs)) *AP )[:];#length(dp.StateSmaplingTime)*  ./ Snorm   ./ μs
+            dp.StateCombinations[1,:] .=  0.0;
+            dp.StateCombinations[:,1] .=  0.0;
+            dp.StateCombinations[1,1] =  1.0+0.0im;
+            
+        elseif testingtype==3
+            println("fixpoint test - homogeneous coordinates")
 
-        dp.eigs .=[1.0+0.0im, EigSol.values...];
-        dp.Ai[2:end,2:end] .= EigSol.vectors;
-        dp.eigs[1]=1.0;
-        dp.StateCombinations[:] .= (APinv*(dp.Ai/ diagm(dp.eigs)) *AP )[:];#length(dp.StateSmaplingTime)*  ./ Snorm   ./ μs
-        dp.StateCombinations[1,:] .=  0.0;
-        dp.StateCombinations[:,1] .=  0.0;
-        dp.StateCombinations[1,1] =  1.0+0.0im;
+            Nstates=size(dp.Si[1,1])[1] 
+            #for k in 1:size(dp.Si,2)
+                #dp.Si[end,k] = (zero(dp.DDEdynProblem.u0) .+ 1.0)/sqrt(Nstates)
+                #dp.Vi[end,k] = (zero(dp.DDEdynProblem.u0) .+ 1.0)/sqrt(Nstates)
+            #end
+            for k in 1:size(dp.Si,1)
+                dp.Si[k,end] = (zero(dp.DDEdynProblem.u0) .+ 1.0)
+                dp.Vi[k,end] = (zero(dp.DDEdynProblem.u0) .+ 1.0)
+            end
+            Hi=(dp.Si'*dp.Si)\(dp.Si'*dp.Vi)
+            EigSol=eigen((dp.Si'*dp.Si)\(dp.Si'*dp.Vi), sortby = x -> -abs(x));
+            
+            tp=Hi[end,1:end-1];
+            tpw=Hi[end,1:end-1]\(1.0 .- Hi[1:end-1,1:end-1] )
+            
+            EigSolSMALL=eigen(Hi[1:end-1,1:end-1] )
+            EigSolSMALL.values
+            dp.eigs[1:end-1] .= EigSolSMALL.values;
+            dp.eigs[end]=1.0;
+            dp.Ai .*=0.0
+            dp.Ai[1:end-1,1:end-1] .= EigSolSMALL.vectors;
+            
+            dp.StateCombinations[:] .= ((dp.Ai/ diagm(dp.eigs)))[:];#length(dp.StateSmaplingTime)*  ./ Snorm   ./ μs
+            #dp.StateCombinations[1:end,1:end-1] .+= tp';
+            dp.StateCombinations[1:end,1:end-1] .+= tpw;
+            #dp.Ai .= norm.(EigSol.vectors);
+            #dp.StateCombinations[:] .= ((dp.Ai/ diagm(dp.eigs))  )[:];#length(dp.StateSmaplingTime)*  ./ Snorm   ./ μs
+        end
     end
     #dp.StateCombinations[:] .= ((dp.Ai) ./ (dp.eigs) )[:];#length(dp.StateSmaplingTime)*  ./ Snorm   ./ μs
     
@@ -186,7 +244,7 @@ function compute_eig!(dp::dynamic_problem)
 end
 #TODO: check saveat=....
 #In this case it saves only the values at the necessary timeponts? BUT will it be still prcise enough for the next integrations????
-function spectralRadiusOfMapping(dp::dynamic_problem)
+function spectralRadiusOfMapping!(dp::dynamic_problem)
     #TODO: itt valami rendesebb iteráció kell, vagy akár a gyökök számát is autómatikusan változtatni
     for k=1:dp.maxiteration
         compute_eig!(dp);
@@ -203,7 +261,13 @@ function spectralRadiusOfMapping(dp::dynamic_problem)
     end
     compute_eig!(dp);
 
-    return abs.(dp.eigs[1])::Float64
+    #return abs.(dp.eigs[1])::Float64
+end
+
+function spectralRadiusOfMapping(prob,alg,maxdelay;Historyresolution=20,eigN=4,zerofixpont=true,p=[],maxiteration=6);
+    dp=dynamic_problem(prob,alg,maxdelay,Historyresolution=Historyresolution,eigN=eigN,zerofixpont=zerofixpont,p=p,maxiteration=maxiteration);
+    spectralRadiusOfMapping!(dp);
+    return dp
 end
 
 function histopryremap(t,A::Matrix,SolutionSetV,solindex)

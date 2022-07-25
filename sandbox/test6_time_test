@@ -12,7 +12,7 @@ using BenchmarkTools
 
 using Statistics
 using Interpolations
-
+"\$\\alpha\$"
 
 using Revise
 #push!(LOAD_PATH,"C:/Users/Bachrathy/.julia/dev/ISSI_test/sandbox")
@@ -43,7 +43,8 @@ lags = [τ]
 taumax=maximum(lags)
 tspan = (0.0, T) # The end of the integration time considert to be the timeperiod of the system.
 
-u0=[1.0+1.0im,1.0+1.0im]
+#u0=([big(1.0)+1.0im,big(1.0)+1.0im]) TODO: test bigfloat
+u0=([1.0+1.0im,1.0+1.0im])
 #u0=[0.0,0.0];
 prob = DDEProblem(delay_mathieu_model, u0, h, tspan, p; constant_lags = lags,reltol=1e-2,abstol=1e-2,dtmax=T/20);#
 alg = MethodOfSteps(Tsit5());
@@ -51,7 +52,7 @@ alg = MethodOfSteps(Tsit5());
 plot(just_a_test_solution)
 
 
-
+#=
 #to JIT precomply
 @time begin 
     
@@ -70,25 +71,32 @@ end
     MethodOfSteps(Rodas4())
 alg = MethodOfSteps(Tsit5());
     Neval=0    
-    ϵtol=1e-6
+    ϵtol=1e-5
 prob = DDEProblem(delay_mathieu_model, u0, h, tspan, p; constant_lags = lags,reltol=ϵtol,abstol=ϵtol,dtmax=T/40);#
- DelayMathieu_egi_prblem=dynamic_problem(prob,alg,taumax,Historyresolution=50,eigN=8,zerofixpont=true,maxiteration=8);
+ DelayMathieu_egi_prblem=dynamic_problem(prob,alg,taumax,Historyresolution=50,eigN=6,zerofixpont=true,maxiteration=6);
 @show eimax=spectralRadiusOfMapping(DelayMathieu_egi_prblem);
 @show Neval
 end
 
-
+=#
 
 
 0.8495221650291361 #reltol=1e-5,abstol=1e-5,dtmax=T/40);#
 eimax=0.8496127142756152#ϵtol=1e-6, dtmax=T/40);#
+      0.8495221640692803#ϵtol=1e-5, dtmax=T/40,eigN=6,zerofixpont=true,maxiteration=6);#
 ## --------
-begin
+
+
+#begin>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>y
 #alg = MethodOfSteps(BS3());
-#Resi=10 .^ (1.0:-0.1:-6)
+#Resi=10 .^ (1.0:-0.1:-3)#5
+
 alg = MethodOfSteps(Tsit5());
-Resi=10 .^ (1.0:-0.1:-4.5)
+Resi=10 .^ (1.0:-0.05:-2.5)#5
+
+Resi=vcat(Resi,Resi[end]/10)
 #alg = MethodOfSteps(Vern6())
+#Resi=10 .^ (1.0:-0.1:-2)
 #alg = MethodOfSteps(DP8());#szuperzajos
 
 
@@ -97,27 +105,43 @@ ti=zeros(size(Resi))
 epsi=zeros(size(Resi))
 for k in 1:size(Resi)[1]
     println(k/size(Resi)[1])
-    ti[k]=@elapsed begin 
+    begin 
         Neval=0    
+
+        #Adaptive timestep
+        
         prob = DDEProblem(delay_mathieu_model, u0, h, tspan, p; constant_lags = lags,reltol=Resi[k],abstol=Resi[k]);#,dtmax=T/20
-      DelayMathieu_egi_prblem=dynamic_problem(prob,alg,taumax,Historyresolution=100,eigN=4,zerofixpont=true,maxiteration=3);
-        epsi[k]=spectralRadiusOfMapping(DelayMathieu_egi_prblem);
+
+        ##Fixed timestep
+        #prob = DDEProblem(delay_mathieu_model, u0, h, tspan, p; constant_lags = lags,adaptive=false,dt=T*Resi[k]);#,dtmax=T/20
+      
+        #DelayMathieu_egi_prblem=dynamic_problem(prob,alg,taumax,Historyresolution=100,eigN=6,zerofixpont=true,maxiteration=4);
+        #spectralRadiusOfMapping!(DelayMathieu_egi_prblem);
+        
+        ti[k]=@elapsed DelayMathieu_egi_prblem=spectralRadiusOfMapping(prob,alg,taumax,Historyresolution=100,eigN=6,zerofixpont=true,maxiteration=4);
+        epsi[k]=abs(DelayMathieu_egi_prblem.eigs[1]);
         Ni[k]=Neval
     end
 end
+
+
+eimax=epsi[end]
+
+
 Ndrop=3;
-Resi=Resi[Ndrop:end]
-Ni=Ni[Ndrop:end]
-epsi=epsi[Ndrop:end]
-ti=ti[Ndrop:end]
+Resi=Resi[Ndrop:end-1]
+Ni=Ni[Ndrop:end-1]
+epsi=epsi[Ndrop:end-1]
+ti=ti[Ndrop:end-1]
 
 f=(x)->log.(abs.(x)) ./ log(10)
-#plot(f.(Resi),f.(Ni))
-#plot(f.(Resi),f.(epsi .- eimax))
-#plot!(f.(Ni),f.(epsi .- eimax))
-plot!(f.(ti),f.(epsi .- eimax))
+p1=plot(f.(Resi),f.(Ni), xlabel = "\$log_{10} ϵ\$", ylabel = "\$log_{10} N_i\$")
+p2=plot(f.(Resi),f.(epsi .- eimax), xlabel = "\$log_{10} ϵ\$", ylabel = "\$log_{10} ϵ_μ\$")
+p3=plot(f.(Ni),f.(epsi .- eimax), xlabel = "\$log_{10} N_i\$", ylabel = "\$log_{10} ϵ_μ\$")
+p4=plot(f.(ti),f.(epsi .- eimax), xlabel = "\$log_{10} T_{CPU}\$", ylabel = "\$log_{10} ϵ_μ\$")
 
 #plot(f.(Ni),f.(ti))
 #plot(f.(Resi),f.(ti))
-
-end
+plot(p1, p2, p3, p4, layout = (2, 2), legend = false)
+#Ni ./ (Resi ) ./ 6.0 ./ 5.0
+#end>>>>>>>>>>>>>>>>>>>>
