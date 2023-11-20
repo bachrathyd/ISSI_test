@@ -7,7 +7,7 @@ using BenchmarkTools
 
 using Statistics
 using Interpolations
-
+using LinearAlgebra
 
 using Revise
 push!(LOAD_PATH,"C:/Users/Bacharthy/.julia/dev/ISSI_test/sandbox")
@@ -28,14 +28,14 @@ kw=0.1;
 κ =0.2;
 
 p=(Ω,kw,κ)
-h(p,t) = CompRand([1.0,1.0])
+h(p,t) = [1.0,1.0]
 τ=2π/Ω
 lags = [τ]
 taumax=maximum(lags)
 T=τ;#0.1*τ;0.1
 tspan = (0.0, T) # The end of the integration time considert to be the timeperiod of the system.
 
-u0=[1.0+0.0im,0.0+1.0im];
+u0=[1.0,0.0];
 
 prob = DDEProblem(turning_modell!, u0, h, tspan, p; constant_lags = lags,reltol=1e-2,dtmax=T/5);#
 
@@ -48,8 +48,9 @@ plot(just_a_test_solution)
 
 
 
-
 @time DM=dynamic_problem(prob,MethodOfSteps(Tsit5()),taumax,Historyresolution=10,eigN=4);
+compute_eig!(DM)
+iterate!(DM)
 @time spectralRadiusOfMapping(DM)
 
 # ---------------------

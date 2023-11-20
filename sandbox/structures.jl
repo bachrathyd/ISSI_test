@@ -7,37 +7,37 @@ struct dynamic_problem{TCompFloat,Tint,Tfloat}
     zerofixpont::Bool
     SolutionSet::Vector{ODESolution}
     StateCombinations::Matrix{TCompFloat}
-    Si::Matrix{Vector{TCompFloat}}
-    Vi::Matrix{Vector{TCompFloat}}
+    Si::Matrix{Vector{Tfloat}}
+    Vi::Matrix{Vector{Tfloat}}
     eigs::Vector{TCompFloat}
-    Ai::Matrix{TCompFloat}
+    Ai::Matrix{Tfloat}
 end
 
-function CompRand(x::Vector)
-    return rand(size(x)...) .- 0.5 + 1.0im*(rand(size(x)...) .- 0.5)
+function Rand(x::Vector)
+    return rand(typeof(x[1]),size(x)...) .- 0.5 
 end
-function CompRand(x::Real)
-    return rand() .- 0.5 + 1.0im*(rand() .- 0.5)
+function Rand(x::Real)
+    return rand(typeof(x)) .- 0.5 
 end
-function CompRand(x)
-    return rand() .- 0.5 + 1.0im*(rand() .- 0.5)
+function Rand(x)
+    return rand(typeof(x)) .- 0.5 
 end
 
 function dynamic_problem(prob,alg,maxdelay;Historyresolution=20,eigN=4,zerofixpont=true,p=[]);
    
     StateSmaplingTime=LinRange(-maxdelay,0.0,Historyresolution); 
     #first solution for random initial functions
-    #TODO: the true random thing, leads to too small stap size at the initial simulation
+    #TODO: the true random thing, leads to too small step size at the initial simulation
     #solset= [
     #    solve(
-    #        remake(prob;u0=CompRand(prob.u0), h=(p,t)->prob.u0+CompRand(prob.u0))
+    #        remake(prob;u0=Rand(prob.u0), h=(p,t)->prob.u0+Rand(prob.u0))
     #        ,alg) for k in 1:eigN];
     
     #plonomial set
     
     solset= [
         solve(
-            remake(prob;u0=CompRand(prob.u0), h=(p,t)->prob.u0+CompRand(prob.u0))
+            remake(prob;u0=Rand(prob.u0), h=(p,t)->Rand(prob.u0))
             ,alg) for k in 1:eigN];
 
     #StateSmaplingTimeSMALL=LinRange(-maxdelay,0.0,100);  
@@ -62,22 +62,22 @@ function dynamic_problem(prob,alg,maxdelay;Historyresolution=20,eigN=4,zerofixpo
     
   #              solset= [
   #                  solve(
-  #                      remake(prob;u0=[2.0+1im,0.5+1im]*0.0 +1.0*CompRand(u0),#p=(k,prob.p[2:end]...),
+  #                      remake(prob;u0=[2.0+1im,0.5+1im]*0.0 +1.0*Rand(u0),#p=(k,prob.p[2:end]...),
   #                      h=(p,t)->[2.0+1im,0.5+1im] .*(k*1+0) .* interpolationfunctions[k](t))
   #                      ,alg,reltol=1e-4,abstol=1e-4) for k in 1:eigN];
 
        #solset= [
        #                     solve(
-       #                         remake(prob;u0=1.0 .+ 0.0*CompRand(u0),#p=(k,prob.p[2:end]...),
+       #                         remake(prob;u0=1.0 .+ 0.0*Rand(u0),#p=(k,prob.p[2:end]...),
        #                         h=(p,t)->[exp(-1.0im*k*t)*2.0,exp(-1.0im*k*t)])
         #                        ,alg,reltol=1e-5,abstol=1e-5) for k in 1:eigN];
 #
     #solset= [
     #    solve(
-     #       remake(prob;u0=CompRand(u0),
+     #       remake(prob;u0=Rand(u0),
      #       h=(p,t)->LinearInterpolation(StateSmaplingTimeSMALL,[[sin(k*t/maxdelay),sin(k*t/maxdelay)] for t in StateSmaplingTimeSMALL])(t))
      #       ,alg,reltol=1e-3,abstol=1e-3) for k in 1:eigN];
-    StateCombinations=diagm(0 => ones(typeof(CompRand(prob.u0[1])),eigN));## at the initaliatio there is no combination, a random inital values are used
+    StateCombinations=diagm(0 => ones(typeof(prob.u0[1]),eigN));## at the initaliatio there is no combination, a random inital values are used
 
     #Si=Matrix{typeof(prob.u0)}(undef,Historyresolution,eigN)
     #Vi=Matrix{typeof(prob.u0)}(undef,Historyresolution,eigN)
@@ -130,12 +130,20 @@ function compute_eig!(dp::dynamic_problem)
  
     Hi=(dp.Si'*dp.Si)\(dp.Si'*dp.Vi);# .+ 0.0im;
 =#
-    #μs,Ai=eigen(Hi, sortby = x -> -abs(x));
-    #dp.eigsμs,dp.Ai=eigen(Hi, sortby = x -> -abs(x));
-    EigSol=eigen((dp.Si'*dp.Si)\(dp.Si'*dp.Vi), sortby = x -> -abs(x));
-    dp.eigs .= EigSol.values;
-    dp.Ai .= EigSol.vectors;
-    #μs,Ai=Arpack.eigs(Hi);#Not good, it does not provide all the eigen values: "nev+2 <= ncv <= n"
+
+    F=schur((dp.Si'*dp.Si)\(dp.Si'*dp.Vi)); 
+    #dp.eigs=sort(F.values, by=abs) ; 
+    dp.eigs.=F.values ; 
+    dp.Ai .= F.vectors; 
+    # dp.StateCombinations[:] .= ((dp.Ai) / diagm(dp.eigs))[:] 
+    dp.StateCombinations[:] .= ((dp.Ai))[:]; 
+    
+    ####μs,Ai=eigen(Hi, sortby = x -> -abs(x));
+    ####dp.eigsμs,dp.Ai=eigen(Hi, sortby = x -> -abs(x));
+    ###EigSol=eigen((dp.Si'*dp.Si)\(dp.Si'*dp.Vi), sortby = x -> -abs(x));
+    ###dp.eigs .= EigSol.values;
+    ###dp.Ai .= EigSol.vectors;
+    ####μs,Ai=Arpack.eigs(Hi);#Not good, it does not provide all the eigen values: "nev+2 <= ncv <= n"
 
     
     #dp.StateCombinations[:] .= ((Ai))[:]# ./ μs./ Snorm)[:];#length(dp.StateSmaplingTime)*  ./ Snorm   ./ μs
@@ -143,7 +151,7 @@ function compute_eig!(dp::dynamic_problem)
     #dp.StateCombinations[:] .= ((Ai)  ./ Snorm)[:];println("Ez nem, jó, mert a V-t lehetne normalizálni és nem az S-t!!!)
     
     #dp.StateCombinations[:] .= ((dp.Ai) / diagm(dp.eigs) )[:];#length(dp.StateSmaplingTime)*  ./ Snorm   ./ μs
-    dp.StateCombinations[:] .= ((dp.Ai) ./ (dp.eigs) )[:];#length(dp.StateSmaplingTime)*  ./ Snorm   ./ μs
+    ###dp.StateCombinations[:] .= ((dp.Ai) ./ (dp.eigs) )[:];#length(dp.StateSmaplingTime)*  ./ Snorm   ./ μs
     
     # dp.StateCombinations = Ai;#./ μs)[:];#length(dp.StateSmaplingTime)*  ./ Snorm   ./ μs
     #return  μs,dp.Si,dp.Vi,Ai
@@ -192,11 +200,3 @@ function SVi1real(dp::dynamic_problem,idx)
  return  Si,Vi
 end
 
-
-#TODO: kell ez egyáltalán!?!?!
-function ComplexinterpFun(sol::ODESolution)
-    itpreal = LinearInterpolation(sol.t,real.(sol.u))
-    itpimag = LinearInterpolation(sol.t,imag.(sol.u))
-
-    itp(x)=itpreal(x) .+ 1.0im .* itpreal(x);
-end
